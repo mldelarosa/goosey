@@ -12,7 +12,7 @@ const upload = multer({
 });
 const jimp = require("jimp");
 const easyimage = require("easyimage");
-const converter = easyimage.convert;
+//const converter = easyimage.convert;
 
 app.engine('html', consolidate.handlebars)
 app.set('view engine', 'html')
@@ -59,15 +59,19 @@ app.post('/birbify', upload.single('file'),  (req, res) => {
 	if (path.extname(req.file.originalname).toLowerCase() != ".png") {
 		new Promise((resolve, reject) => {
 			console.log('Converting image to PNG...');
-			converter({
-				src: req.file.path,
-				dst: req.file.path + '.png'
-			}, (err, stdout) => {
-				console.log('Converted image to PNG...');
-				req.file.path = req.file.path + '.png'
-				resolve(req.file.path)
-			});
+			easyimage.execute(
+				'convert',
+				[
+					req.file.path,
+					req.file.path + '.png'
+				]
+			).then(() => {
+				resolve();
+			}, (error) => {
+				reject(error);
+			})
 		}).then((data) => {			
+			req.file.path = req.file.path + '.png'
 			console.log('saved image to ' + req.file.path)
 			mergeImages([req.file.path, './views/res/eyes.png', './views/res/mouth.png'], {
 				Canvas: Canvas
