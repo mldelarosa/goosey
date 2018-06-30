@@ -7,6 +7,7 @@ const Canvas = require('canvas')
 const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
+const imageSize = require('image-size');
 const upload = multer({
   dest: 'uploads'
 });
@@ -32,16 +33,23 @@ app.get('/birbify', (req, res) => {
 	})
 })
 
-function birbifyImg() {
-	
+let birbPaths = [
+	'./res/birbify-imgur/honkatiel.png',
+	'./res/birbify-imgur/blockatiel.png',
+	'./res/birbify-imgur/cockatiel.png',
+	//'./res/birbify-imgur/sam.png'
+]
+
+function getPathToRandomBirb() {
+	return birbPaths[getRandomInt(3)];
+}
+
+function getRandomInt(max) {
+  return Math.floor(Math.random() * Math.floor(max));
 }
 
 //handle photo upload
 app.post('/birbify', upload.single('file'),  (req, res) => {
-	
-	//upload.single('file')(req, res, (err) => {
-	//});
-	
 	console.log('Birbifying your image')
 	if(req.file == null) {
 		console.log('posted file is null')
@@ -53,54 +61,82 @@ app.post('/birbify', upload.single('file'),  (req, res) => {
 	}
 	
 	const tempPath = req.file.path;// + path.extname(req.file.originalname);
-	
-	console.log('Uploaded temp to: ' + tempPath);
-	//console.log('Received image of format: ' + path.extname(req.file.originalname).toLowerCase());
-	if (path.extname(req.file.originalname).toLowerCase() != ".png") {
-		new Promise((resolve, reject) => {
+	console.log('Uploaded temp to: ' + tempPath);	
+	new Promise((resolve, reject) => {
+		if (path.extname(req.file.originalname).toLowerCase() != ".png") {
 			console.log('Converting image to PNG...');
 			easyimage.execute(
-				'convert',
-				[
-					req.file.path,
-					req.file.path + '.png'
-				]
-			).then(() => {
-				resolve();
-			}, (error) => {
-				reject(error);
-			})
-		}).then((data) => {			
-			req.file.path = req.file.path + '.png'
-			console.log('saved image to ' + req.file.path)
-			mergeImages([req.file.path, './views/res/eyes.png', './views/res/mouth.png'], {
-				Canvas: Canvas
-			})
-			.then((birbifiedImg) => {
-				res.render('birbify/birbified', {
-					title: '>v<',
-					birbified_img: birbifiedImg
-				})
-			}, (error) => {
-				console.log(error)
-				res.render('error', {
-					title: 'ovo;;',
-					error_description: 'Hmmmm... had trouble birbifying your image'
-				})
-			})
-		}).catch( (e) => {
-			console.log("Error: ", e);
-		});
-	} else {
-		console.log('saved image to ' + req.file.path)
-		mergeImages([req.file.path, './views/res/eyes.png', './views/res/mouth.png'], {
-			Canvas: Canvas
+					'convert',
+					[
+						req.file.path,
+						req.file.path + '.png'
+					]
+				).then(() => {
+					req.file.path = req.file.path + '.png'
+					resolve();
+				}, (error) => {
+					reject(error);
+				});
+		} else {
+			resolve();
+		}
+	}).then((data) => {			
+		console.log('saved image to ' + req.file.path);
+		
+		birbImgPath = getPathToRandomBirb();
+		console.log('getting random image: ' + birbImgPath);
+		let imgDimension = imageSize(req.file.path);
+		let layerDimension = imageSize(birbImgPath);
+		
+		let randomOrientation = getRandomInt(2);
+		let layerX = 0;
+		let layerY = 0;
+		
+		console.log('Img Dimension Height: ' + imgDimension.height);
+		console.log('Img Dimension Width: ' + imgDimension.width);
+		
+		console.log('Layer Dimension Height: ' + layerDimension.height);
+		console.log('Layer Dimension Width: ' + layerDimension.width);
+		
+		imgDimension.height = Number.parseInt(imgDimension.height);
+		imgDimension.width = Number.parseInt(imgDimension.width);
+		layerDimension.height = Number.parseInt(layerDimension.height);
+		layerDimension.width = Number.parseInt(layerDimension.width);
+		
+		if(randomOrientation == 0) { // bottom left
+			console.log('Orienting to bottom left');
+			layerX = 0;
+			if(imgDimension.height > layerDimension.height) {
+				layerY = imgDimension.height - layerDimension.height;
+			} else {
+				layerY = 0;
+			}
+			console.log('Layer placement: ' + layerX + ', ' + layerY);
+		} else if(randomOrientation == 1) { //bottom right
+			console.log('Orienting to bottom right');
+			layerX = imgDimension.width - layerDimension.width;
+			if(imgDimension.height > layerDimension.height) {
+				layerY = imgDimension.height - layerDimension.height;
+			} else {
+				layerY = 0;
+			}
+			console.log('Layer placement: ' + layerX + ', ' + layerY);
+		}
+		
+		mergeImages([
+			{ src: req.file.path, x: 0, y: 0 },
+			{ src: birbImgPath, x:layerX, y:layerY },
+		], {
+			Canvas: Canvas,
+			width: imgDimension.width,
+			height: imgDimension.height
 		})
 		.then((birbifiedImg) => {
+			console.log('did merge images');
 			res.render('birbify/birbified', {
 				title: '>v<',
 				birbified_img: birbifiedImg
-			})
+			});
 		}, (error) => {
 			console.log(error)
 			res.render('error', {
@@ -108,7 +144,9 @@ app.post('/birbify', upload.single('file'),  (req, res) => {
 				error_description: 'Hmmmm... had trouble birbifying your image'
 			})
 		})
-	}
+	}).catch( (e) => {
+		console.log("Error: ", e);
+	});
 })
 
 app.get('/test', (req, res) => {
